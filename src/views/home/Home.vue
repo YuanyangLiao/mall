@@ -1,7 +1,13 @@
 <template>
   <div id="home">
     <nav-bar class="home-nav"><div slot="center">购物街</div></nav-bar>
-    <scroll class="content">
+
+    <scroll class="content" 
+            ref="scroll" 
+            :probe-type="3" 
+            @scroll="contentScroll"
+            :pull-up-load="true"
+            @pullingUp='loadMore'>
       <home-swiper :banners="banners"/>
       <home-recommend-view :recommends="recommends"/>
       <feature-view/>
@@ -11,6 +17,7 @@
       <goods-list :goods="showGoods"/>
     </scroll>
 
+    <back-top @click.native="backClick" v-show="isShowBackTop"/>
   </div>
 </template>
 
@@ -29,6 +36,8 @@
   import GoodsList from 'components/content/goodsList/GoodsList'
   // 滚动插件
   import Scroll from 'components/common/scroll/Scroll'
+  // 回到顶部
+  import BackTop from 'components/content/backTop/BackTop'
   // 网络请求
   import {getHomeMultidata,getHomeGoods} from 'network/home'
   export default {
@@ -42,7 +51,8 @@
           'new':{page:0,list:[]},
           'sell':{page:0,list:[]}
         },
-        currentType:'pop'
+        currentType:'pop',
+        isShowBackTop:false
       }
     },
     components: {
@@ -52,12 +62,13 @@
       FeatureView,
       TabControl,
       GoodsList,
-      Scroll
+      Scroll,
+      BackTop
     },
     created(){
-      // 请求多个数据
+      // 1. 请求多个数据
       this.getHomeMultidata()
-      // 请求商品数据
+      // 2. 请求商品数据
       this.getHomeGoods('pop')
       this.getHomeGoods('new')
       this.getHomeGoods('sell')
@@ -67,11 +78,27 @@
         return this.goods[this.currentType].list
       }
     },
-    mounted(){},
+    mounted(){
+      // 监听item中图片加载完成
+      const refresh = this.debounce(this.$refs.scroll.refresh,50) // 调用防抖动方法，降低刷新频率
+      this.$bus.$on('itemImageLoad',()=>{   // 通过事件总线监听事件
+        refresh()
+      })
+    },
     methods: {
       /**
        * 事件监听相关方法
        */
+      // 防抖动的方法
+      debounce(func,delay){
+        let timer = null
+        return function(...args){
+          if(timer) clearTimeout(timer)
+          timer = setTimeout(()=>{
+            func.apply(this,args)
+          },delay)
+        }
+      },
       tabCLick(index){
         switch(index){
           case 0:
@@ -85,6 +112,17 @@
             break
         }
       },
+      backClick(){
+        this.$refs.scroll.scrollTo(0,0)
+      },
+      contentScroll(position){
+        this.isShowBackTop = (-position.y) > 1000
+      },
+      loadMore(){
+        this.getHomeGoods(this.currentType)
+        this.$refs.scroll.scroll.refresh()
+      },
+
       /**
        * 网络请求相关方法
        */
@@ -98,7 +136,7 @@
         getHomeGoods(type,page).then(res => {
           this.goods[type].list.push(...res.data.data.list)
           this.goods[type].page += 1
-          
+          this.$refs.scroll.finishPullUp()
       })}
     }
   }
@@ -125,6 +163,7 @@
   }
   .content{
     position: absolute;
+    overflow: hidden;
     top: 44px;
     bottom: 49px;
     left: 0;
