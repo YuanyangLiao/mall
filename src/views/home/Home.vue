@@ -1,19 +1,23 @@
 <template>
   <div id="home">
     <nav-bar class="home-nav"><div slot="center">购物街</div></nav-bar>
-
+    <tab-control :titles="['流行','新款','精选']"
+                   @tabCLick="tabCLick"
+                   ref="tabControl1"
+                   class="tab-control"
+                   v-show="isTabFixed"/>
     <scroll class="content" 
             ref="scroll" 
             :probe-type="3" 
             @scroll="contentScroll"
             :pull-up-load="true"
             @pullingUp='loadMore'>
-      <home-swiper :banners="banners"/>
+      <home-swiper :banners="banners" @swiperImageLoad="swiperImageLoad"/>
       <home-recommend-view :recommends="recommends"/>
       <feature-view/>
-      <tab-control class="tab-control" 
-                  :titles="['流行','新款','精选']"
-                  @tabCLick="tabCLick"/>
+      <tab-control :titles="['流行','新款','精选']"
+                   @tabCLick="tabCLick"
+                   ref="tabControl2"/>
       <goods-list :goods="showGoods"/>
     </scroll>
 
@@ -22,24 +26,22 @@
 </template>
 
 <script>
-  // 导航栏
-  import NavBar from 'components/common/navbar/NavBar'
-  // 轮播图
-  import HomeSwiper from './childComps/HomeSwiper'
-  // 推荐
-  import HomeRecommendView from './childComps/HomeRecommendView'
-  // 特色
-  import FeatureView from './childComps/FeatureView'
-  // 控制栏
-  import TabControl from 'components/content/tabControl/TabControl'
-  // 商品列表
-  import GoodsList from 'components/content/goodsList/GoodsList'
-  // 滚动插件
-  import Scroll from 'components/common/scroll/Scroll'
-  // 回到顶部
-  import BackTop from 'components/content/backTop/BackTop'
-  // 网络请求
-  import {getHomeMultidata,getHomeGoods} from 'network/home'
+  /**
+   * 组件
+   */
+  import NavBar from 'components/common/navbar/NavBar'  // 导航栏
+  import HomeSwiper from './childComps/HomeSwiper'  // 轮播图
+  import HomeRecommendView from './childComps/HomeRecommendView'  // 推荐
+  import FeatureView from './childComps/FeatureView'  // 特色
+  import TabControl from 'components/content/tabControl/TabControl' // 控制栏
+  import GoodsList from 'components/content/goodsList/GoodsList'  // 商品列表
+  import Scroll from 'components/common/scroll/Scroll'  // 滚动插件
+  import BackTop from 'components/content/backTop/BackTop'  // 回到顶部
+  /**
+   * 函数
+   */
+  import {debounce} from 'common/utils' // 防抖动
+  import {getHomeMultidata,getHomeGoods} from 'network/home'  // 网络请求
   export default {
     name: 'Home',
     data(){
@@ -52,7 +54,9 @@
           'sell':{page:0,list:[]}
         },
         currentType:'pop',
-        isShowBackTop:false
+        isShowBackTop:false,
+        tabOffsetTop:0,
+        isTabFixed:false
       }
     },
     components: {
@@ -80,25 +84,16 @@
     },
     mounted(){
       // 监听item中图片加载完成
-      const refresh = this.debounce(this.$refs.scroll.refresh,50) // 调用防抖动方法，降低刷新频率
+      const refresh = debounce(this.$refs.scroll.refresh,50) // 调用防抖动方法，降低刷新频率
       this.$bus.$on('itemImageLoad',()=>{   // 通过事件总线监听事件
         refresh()
       })
+      
     },
     methods: {
       /**
        * 事件监听相关方法
        */
-      // 防抖动的方法
-      debounce(func,delay){
-        let timer = null
-        return function(...args){
-          if(timer) clearTimeout(timer)
-          timer = setTimeout(()=>{
-            func.apply(this,args)
-          },delay)
-        }
-      },
       tabCLick(index){
         switch(index){
           case 0:
@@ -111,16 +106,27 @@
             this.currentType = 'sell'
             break
         }
+        this.$refs.tabControl1.currentIndex = index
+        this.$refs.tabControl2.currentIndex = index
       },
       backClick(){
         this.$refs.scroll.scrollTo(0,0)
       },
       contentScroll(position){
+        // 判断BackTop是否显示
         this.isShowBackTop = (-position.y) > 1000
+
+        // 决定tabControl是否吸顶（position:fixed）
+        this.isTabFixed = (-position.y) > this.tabOffsetTop
       },
       loadMore(){
         this.getHomeGoods(this.currentType)
         this.$refs.scroll.scroll.refresh()
+      },
+      swiperImageLoad(){
+        // 获取tabControl的offsetTop
+        // 获取组件中的元素需要通过：$el
+        this.tabOffsetTop = this.$refs.tabControl2.$el.offsetTop
       },
 
       /**
@@ -136,30 +142,25 @@
         getHomeGoods(type,page).then(res => {
           this.goods[type].list.push(...res.data.data.list)
           this.goods[type].page += 1
-          this.$refs.scroll.finishPullUp()
+          this.$refs.scroll.finishPullUp()  // 完成上拉加载更多
       })}
     }
   }
 </script>
 <style scoped>
   #home{
-    padding-top: 44px;
+    /* padding-top: 44px; */
     height: 100vh;
     position: relative;
   }
   #home .home-nav{
     background-color: var(--color-tint);
     color: #fff;
-    position: fixed;
+    /* position: fixed;
     top: 0;
     right: 0;
     left: 0;
-    z-index: 7;
-  }
-  .tab-control{
-    position: sticky;
-    top: 44px;
-    z-index: 7;
+    z-index: 7; */
   }
   .content{
     position: absolute;
@@ -168,5 +169,9 @@
     bottom: 49px;
     left: 0;
     right: 0;
+  }
+  .tab-control{
+    position: relative;
+    z-index: 9;
   }
 </style>
